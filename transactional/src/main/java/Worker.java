@@ -26,7 +26,7 @@ public class Worker extends Thread {
         this.totalRt = totalRt;
         this.rtPerType = rtPerType;
         this.conn = DriverManager.getConnection(options.database, options.user, options.passwd);
-        this.workload = new Workload(this.conn);
+        this.workload = new Workload(this.conn,options.transactionType);
     }
 
 

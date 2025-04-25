@@ -37,27 +37,41 @@ public class Workload {
     );
 
     // weights for each transaction type
-    private final List<Map.Entry<TransactionType, Integer>> transactionWeights = List.of(
-        entry(TransactionType.AddPlaytime, 20),
-        entry(TransactionType.ReviewGame, 5),
-        entry(TransactionType.BuyGame, 10),
-        entry(TransactionType.NewFriendship, 5),
-        entry(TransactionType.NewGame, 1),
-        entry(TransactionType.NewUser, 4),
-        entry(TransactionType.GameInfo, 25),
-        entry(TransactionType.GameReviews, 5),
-        entry(TransactionType.UserInfo, 10),
-        entry(TransactionType.RecentGamesPerTag, 10),
-        entry(TransactionType.SearchGames, 5)
-    );
-    private final int totalWeight = transactionWeights.stream().mapToInt(Map.Entry::getValue).sum();
+    private List<Map.Entry<TransactionType, Integer>> transactionWeights;
 
+    private int totalWeight;
+    private void initTransactionWeights(String type) {
+        List<Map.Entry<TransactionType, Integer>> weights = new ArrayList<>();
 
-    public Workload(Connection c) throws SQLException {
+        // OLTP transactions
+        if (type.equals("all") || type.equals("oltp")) {
+            weights.add(entry(TransactionType.AddPlaytime, 20));
+            weights.add(entry(TransactionType.ReviewGame, 5));
+            weights.add(entry(TransactionType.BuyGame, 10));
+            weights.add(entry(TransactionType.NewFriendship, 5));
+            weights.add(entry(TransactionType.NewGame, 1));
+            weights.add(entry(TransactionType.NewUser, 4));
+        }
+
+        // OLAP transactions
+        if (type.equals("all") || type.equals("olap")) {
+            weights.add(entry(TransactionType.GameInfo, 25));
+            weights.add(entry(TransactionType.GameReviews, 5));
+            weights.add(entry(TransactionType.UserInfo, 10));
+            weights.add(entry(TransactionType.RecentGamesPerTag, 10));
+            weights.add(entry(TransactionType.SearchGames, 5));
+        }
+
+        this.transactionWeights = weights;
+        this.totalWeight = transactionWeights.stream().mapToInt(Map.Entry::getValue).sum();
+    }
+
+    public Workload(Connection c,String transactionType) throws SQLException {
         conn = c;
         conn.setAutoCommit(false); // autocommit = off to execute operations inside a transaction
         prepareStatements();
         populateIds();
+        initTransactionWeights(transactionType);  // Inicializa os pesos com base no tipo
     }
 
 
@@ -65,28 +79,29 @@ public class Workload {
      *  Prepares the statements used in this workload
      */
     private void prepareStatements() throws SQLException {
+        //OLTP
         addPlaytime = conn.prepareStatement("""
             update library
             set playtime = playtime + ?
             where user_id = ? and game_id = ?
         """);
-
+        //OLTP
         addReview = conn.prepareStatement("""
             insert into review (user_id, game_id, created_date, recommend, text)
             values (?, ?, now(), ?, ?)
         """);
-
+        //OLTP
         addToLibrary = conn.prepareStatement("""
             insert into library (user_id, game_id, added_date, buy_price, playtime, achievements)
             select ?, ?, now(), price, 0, 0
             from game
             where id = ?
         """);
-
+        //OLTP
         addFriendship = conn.prepareStatement("""
             insert into friendship values (?, ?)
         """);
-
+        //OLTP
         addGame = conn.prepareStatement("""
             with i_game as (
                 insert into game (
@@ -123,59 +138,59 @@ public class Workload {
             select *
             from i_game, i_developer, i_publisher, i_category, i_genre, i_tag
         """);
-
+        //OLTP
         addUser = conn.prepareStatement("""
             insert into users (id, username, email, created_date, vac_banned, profile_description, country)
             values (default, ?, ?, ?, ?, ?, ?)
         """);
-
+        //OLAP
         getGameInfo = conn.prepareStatement("""
             select name, release_date, price, long_description, platforms, languages
             from game
             where id = ?
         """);
-
+        //OLAP
         getGameDevelopers = conn.prepareStatement("""
             select coalesce(array_agg(name), '{}')
             from developer
             join games_developers on developer_id = id
             where game_id = ?
         """);
-
+        //OLAP
         getGamePublishers = conn.prepareStatement("""
             select coalesce(array_agg(name), '{}')
             from publisher
             join games_publishers on publisher_id = id
             where game_id = ?
         """);
-
+        //OLAP
         getGameCategories = conn.prepareStatement("""
               select coalesce(array_agg(name), '{}')
               from category
               join games_categories on category_id = id
               where game_id = ?
         """);
-
+        //OLAP
         getGameGenres = conn.prepareStatement("""
               select coalesce(array_agg(name), '{}')
               from genre
               join games_genres on genre_id = id
               where game_id = ?
         """);
-
+        //OLAP
         getGameTags = conn.prepareStatement("""
             select coalesce(array_agg(name), '{}')
             from tag
             join games_tags on tag_id = id
             where game_id = ?
         """);
-
+        //OLAP
         getGameScore = conn.prepareStatement("""
             select round(sum(recommend::int) / count(*)::decimal * 100, 3)
             from review
             where game_id = ?
         """);
-
+        //OLAP
         getGameRecentReviews = conn.prepareStatement("""
             select u.id, u.username, r.created_date, r.recommend, r.text, l.playtime
             from review r
@@ -185,13 +200,13 @@ public class Workload {
             order by r.created_date desc
             limit 25
         """);
-
+        //OLAP
         getUserInfo = conn.prepareStatement("""
             select username, created_date, vac_banned, profile_description, country
             from users
             where id = ?;
         """);
-
+        //OLAP
         getUserTopGames = conn.prepareStatement("""
             select id, name, playtime
             from library
@@ -200,7 +215,7 @@ public class Workload {
             order by 3 desc
             limit 5
         """);
-
+        //OLAP
         getRecentGamesPerTag = conn.prepareStatement("""
             select g.id, g.name, g.release_date
             from tag t
@@ -210,14 +225,14 @@ public class Workload {
             order by g.release_date desc
             limit 25
         """);
-
+        //OLAP
         getGamesByTitle = conn.prepareStatement("""
             select id, name, release_date
             from game
             where to_tsvector('english', name) @@ to_tsquery('english', ?)
             limit 25
         """);
-
+        //OLAP
         getGamesSemantic = conn.prepareStatement("""
             select g.id, g.name, g.release_date
             from game g

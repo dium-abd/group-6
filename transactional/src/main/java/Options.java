@@ -21,4 +21,7 @@ public class Options {
 
     @Parameter(names = {"-c","--clients"}, description = "number of client threads")
     public int clients = 16;
+
+    @Parameter(names = {"-t", "--type"}, description = "transaction type to run (oltp, olap, all)")
+    public String transactionType = "all";
 }
