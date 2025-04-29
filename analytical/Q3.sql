@@ -1,13 +1,12 @@
 -- Indexes used for better performance of the query
 CREATE INDEX idx_developer_name ON developer(name text_pattern_ops);
 CREATE INDEX idx_publisher_name ON publisher(name text_pattern_ops);
-CREATE INDEX idx_library_game_user ON library(game_id, user_id);
+CREATE INDEX idx_games_publishers_pubid_gameid ON games_publishers (publisher_id, game_id);
+CREATE INDEX idx_games_developers_devid_gameid ON games_developers (developer_id, game_id);
+CREATE INDEX idx_library_game_user_including ON library (game_id, user_id) INCLUDE (user_id);
 
-
--- possiveis parametros a dar tunning para reduzir o tempo do parallel scan 
---SET max_parallel_workers_per_gather = 4;
---SET parallel_tuple_cost = 0.1;
---SET parallel_setup_cost = 1000;
+-- correr cada vez que entrarmos no psql
+SET work_mem = '128MB'; -- Melhores valores: 128MB, 256MB
 
 -- arguments:
 --   name prefix (Ubisoft)
