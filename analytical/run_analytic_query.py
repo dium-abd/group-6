@@ -23,33 +23,46 @@ def run_query(filepath, repetitions):
     with open(filepath, 'r') as f:
         sql = f.read()
 
-    total = 0
+    all_runs = []  # Lista de (exec_time, plan_text)
+
     print(f"\n== Executando {filepath} {repetitions}x com EXPLAIN ANALYZE ==\n")
 
+    # Runs de aquecimento
     for i in range(2):
         cur = conn.cursor()
         cur.execute(sql)
-        cur.close()    
-    print("Runs de inicialização concluidas.")
+        plan = "\n".join(row[0] for row in cur.fetchall())
+        exec_time = extract_total_exec_time(plan)
+        print(f"Warm-up {i+1}: {exec_time:.2f} ms" if exec_time else "Erro ao extrair tempo!")
+        cur.close()
 
+    print("Runs de aquecimento concluidas.\n")
+
+    total = 0
+
+    # Runs principais
     for i in range(repetitions):
         cur = conn.cursor()
         cur.execute(sql)
         plan = "\n".join(row[0] for row in cur.fetchall())
-
         exec_time = extract_total_exec_time(plan)
         if exec_time is not None:
-            print(f"Run {i+1}: {exec_time:.2f} ms (medido no plano)")
+            all_runs.append((exec_time, plan))
+            print(f"Run {i+1}: {exec_time:.2f} ms")
             total += exec_time
         else:
             print(f"Run {i+1}: ERRO ao extrair tempo do plano!")
-
         cur.close()
 
     conn.close()
 
     avg = total / repetitions
     print(f"\n🏁 Tempo médio (EXPLAIN): {avg:.2f} ms em {repetitions} execuções.")
+
+    # Encontra o plano mais próximo da média
+    closest_run = min(all_runs, key=lambda x: abs(x[0] - avg))
+    print(f"\n📌 Plano mais próximo da média ({closest_run[0]:.2f} ms):\n")
+    print(closest_run[1])
 
 # ------------------------------
 # Argumentos: ficheiro.sql num_repetições
