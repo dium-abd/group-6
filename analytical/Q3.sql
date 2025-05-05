@@ -1,21 +1,30 @@
--- correr cada vez que entrarmos no psql
-SET work_mem = '128MB'; -- Testar melhores tempos
-
+SET work_mem = '4MB';
 -- arguments:
 --   name prefix (Ubisoft)
 EXPLAIN (ANALYZE, BUFFERS)
-SELECT count(*) AS total, count(DISTINCT l.user_id) AS unique
-FROM library l
-WHERE l.game_id IN (
-    SELECT gp.game_id
-    FROM publisher p
-    JOIN games_publishers gp ON gp.publisher_id = p.id
-    WHERE p.name = 'Ubisoft'
-    
-    UNION ALL
-    
-    SELECT gd.game_id
-    FROM developer d
-    JOIN games_developers gd ON gd.developer_id = d.id
-    WHERE d.name = 'Ubisoft'
-);
+SELECT cuc.total_users, cuc.unique_users
+FROM company_users_count cuc
+WHERE cuc.company_name = 'Ubisoft';
+
+-- Query original:
+--
+--EXPLAIN (ANALYZE, BUFFERS)
+--SELECT count(*) AS total, count(DISTINCT id) AS unique
+--FROM (
+--    (
+--        SELECT p.name, u.id
+--        FROM publisher p
+--        JOIN games_publishers gp ON gp.publisher_id = p.id
+--        JOIN library l ON l.game_id = g.id
+--    )
+--    UNION ALL
+--    (
+--        SELECT d.name, u.id
+--        FROM developer d
+--        JOIN games_developers gd ON gd.developer_id = d.id
+--        JOIN game g ON g.id = gd.game_id
+--        JOIN library l ON l.game_id = g.id
+--        JOIN users u ON u.id = l.user_id
+--    )
+--)
+--WHERE name LIKE 'Ubisoft';

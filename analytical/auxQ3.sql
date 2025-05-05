@@ -1,14 +1,36 @@
--- Indexes used for better performance of the query
-CREATE INDEX idx_developer_name ON developer(name);
-CREATE INDEX idx_publisher_name ON publisher(name);
-CREATE INDEX idx_games_publishers_pubid_gameid ON games_publishers (publisher_id, game_id);
-CREATE INDEX idx_games_developers_devid_gameid ON games_developers (developer_id, game_id);
-CREATE INDEX idx_library_game_user_including ON library (game_id, user_id) INCLUDE (user_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public' 
+          AND table_name = 'company_users_count'
+    ) THEN
+        -- Create the table
+        CREATE TABLE company_users_count (
+            company_name VARCHAR PRIMARY KEY,
+            total_users INTEGER,
+            unique_users INTEGER
+        );
 
--- tabela adicional para guardar o numero de users que comprou jogos de cada empresa
---CREATE TABLE company_users_count (
---    company_name VARCHAR PRIMARY KEY,
---    total_users INTEGER,
---    distinct_users INTEGER
---)
--- ver como usar isto (é preciso popular a tabela e atualizar a cada compra,etc)
+        -- Populate the table
+        INSERT INTO company_users_count (company_name, total_users, unique_users)
+        SELECT 
+            g.name AS company_name, 
+            count(*) AS total_users, 
+            count(DISTINCT l.user_id) AS unique_users
+        FROM (
+            SELECT p.name, gp.game_id
+            FROM publisher p
+            JOIN games_publishers gp ON gp.publisher_id = p.id
+            
+            UNION ALL
+            
+            SELECT d.name, gd.game_id
+            FROM developer d
+            JOIN games_developers gd ON gd.developer_id = d.id
+        ) AS g
+        JOIN library l ON l.game_id = g.game_id
+        GROUP BY g.name;
+    END IF;
+END
+$$;
