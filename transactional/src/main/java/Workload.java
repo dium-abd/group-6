@@ -235,12 +235,15 @@ public class Workload {
         //OLAP
         getGamesSemantic = conn.prepareStatement("""
             select g.id, g.name, g.release_date
-            from game g
-            join game_search_embedding gse on gse.game_id = g.id
-            join query_embedding_sample qes on true
+            from query_embedding_sample qes,
+            lateral(
+                select g.id, g.name, g.release_date
+                from game_search_embedding gse
+                join game g on g.id = gse.game_id
+                ORDER BY gse.embedding <-> qes.embedding
+                LIMIT 25
+            ) g
             where qes.id = ?
-            order by gse.embedding <-> qes.embedding
-            limit 25;
         """);
     }
 
