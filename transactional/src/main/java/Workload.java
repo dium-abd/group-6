@@ -11,10 +11,10 @@ public class Workload {
 
     private final Random rand = new Random();
     private final Connection conn;
-    private PreparedStatement addPlaytime, addReview, addToLibrary, addFriendship, addGame, addUser,
-            getGameInfo, getGameDevelopers, getGamePublishers, getGameCategories, getGameGenres, getGameTags,
-            getGameScore, getGameRecentReviews, getUserInfo, getUserTopGames, getRecentGamesPerTag, getGamesByTitle,
-            getGamesSemantic;
+    private PreparedStatement addPlaytime, addReview, addToLibrary, getGamesByCompany, checkUserGame, updateCompanyTotal, 
+            addFriendship, addGame, addUser, getGameInfo, getGameDevelopers, getGamePublishers, getGameCompanies, 
+            getGameCategories, getGameGenres, getGameTags, getGameScore, getGameRecentReviews, getUserInfo, getUserTopGames,
+            getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
     // considered ids for this client
     private final Map<String, List<Integer>> ids = Map.of(
             "game", new ArrayList<>(),
@@ -97,6 +97,28 @@ public class Workload {
             from game
             where id = ?
         """);
+        // Get all games from a company
+        getGamesByCompany = conn.prepareStatement("""
+            select gp.game_id from games_publishers gp join publisher p on gp.publisher_id = p.id where p.name = ?
+            union
+            select gd.game_id from games_developers gd join developer d on gd.developer_id = d.id where d.name = ?
+        """);
+        // Check if user already owns a game from this company
+        checkUserGame = conn.prepareStatement("""
+            select * from library l
+            where l.user_id = ?
+            and l.game_id = ?
+            limit 1
+        """);
+        // Update or insert into company_users_count
+        updateCompanyTotal = conn.prepareStatement("""
+            insert into company_users_count (company_name, total, distinct_users)
+            values (?, 1, ?)
+            on conflict (company_name)
+            do update set 
+                total = company_users_count.total + 1,
+                distinct_users = company_users_count.distinct_users + excluded.distinct_users
+        """);
         //OLTP
         addFriendship = conn.prepareStatement("""
             insert into friendship values (?, ?)
@@ -161,6 +183,18 @@ public class Workload {
             select coalesce(array_agg(name), '{}')
             from publisher
             join games_publishers on publisher_id = id
+            where game_id = ?
+        """);
+        //OLAP
+        getGameCompanies = conn.prepareStatement("""
+            select coalesce(array_agg(name), '{}')
+            from publisher
+            join games_publishers on publisher_id = id
+            where game_id = ?
+            union
+            select coalesce(array_agg(name), '{}')
+            from developer
+            join games_developers on developer_id = id
             where game_id = ?
         """);
         //OLAP
@@ -332,8 +366,38 @@ public class Workload {
         int userId = Utils.randomElement(ids.get("users"));
         int gameId = Utils.randomElement(ids.get("game"));
 
+        // 1. Get all companies (publishers and developers) for the game
+        Utils.setPreparedStatementArgs(getGameCompanies, gameId, gameId);
+        ResultSet companies = getGameCompanies.executeQuery();
+        
+        while (companies.next()) {
+            String companyName = companies.getString(1);
+            boolean isNewUser = true;
+            
+            // 2. Get all games from this company
+            Utils.setPreparedStatementArgs(getGamesByCompany, companyName, companyName);
+            ResultSet games = getGamesByCompany.executeQuery();
+
+            while (games.next()) {
+
+                // 3. Check if user already owns this game
+                Utils.setPreparedStatementArgs(checkUserGame, userId, games.getInt(1));
+                ResultSet hasGame = checkUserGame.executeQuery();
+                if(hasGame.next()) {
+                    isNewUser = false;
+                    break; // no need to check other games from this company
+                }
+            }
+
+            // 4. Insert or update company_users_count
+            Utils.setPreparedStatementArgs(updateCompanyTotal, companyName, isNewUser ? 1 : 0);
+            updateCompanyTotal.executeUpdate();
+        }
+
+        // 5. Add game to library
         Utils.setPreparedStatementArgs(addToLibrary, userId, gameId, gameId);
         addToLibrary.executeUpdate();
+
         conn.commit();
     }
 
