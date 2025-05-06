@@ -112,12 +112,12 @@ public class Workload {
         """);
         // Update or insert into company_users_count
         updateCompanyTotal = conn.prepareStatement("""
-            insert into company_users_count (company_name, total, distinct_users)
+            insert into company_users_count (company_name, total_users, unique_users)
             values (?, 1, ?)
             on conflict (company_name)
             do update set 
-                total = company_users_count.total + 1,
-                distinct_users = company_users_count.distinct_users + excluded.distinct_users
+                total_users = company_users_count.total_users + 1,
+                unique_users = company_users_count.unique_users + excluded.unique_users
         """);
         //OLTP
         addFriendship = conn.prepareStatement("""

@@ -27,7 +27,8 @@ GROUP BY 1, 2
 ORDER BY count(*) DESC
 LIMIT 15;
 
-
+-- Query original:
+--
 --WITH args AS (
 --    SELECT 3331100 AS id
 --)
