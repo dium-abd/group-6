@@ -11,10 +11,10 @@ public class Workload {
 
     private final Random rand = new Random();
     private final Connection conn;
-    private PreparedStatement addPlaytime, addReview, addToLibrary, getGamesByCompany, checkUserGame, updateCompanyTotal, 
-            addFriendship, addGame, addUser, getGameInfo, getGameDevelopers, getGamePublishers, getGameCompanies, 
-            getGameCategories, getGameGenres, getGameTags, getGameScore, getGameRecentReviews, getUserInfo, getUserTopGames,
-            getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
+    private PreparedStatement addPlaytime, addReview, addToLibrary, addToCompanyUsersCount,
+            addFriendship, addGame, addUser, getGameInfo, getGameDevelopers, getGamePublishers, 
+            getGameCategories, getGameGenres, getGameTags, getGameScore, getGameRecentReviews, 
+            getUserInfo, getUserTopGames, getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
     // considered ids for this client
     private final Map<String, List<Integer>> ids = Map.of(
             "game", new ArrayList<>(),
@@ -97,27 +97,58 @@ public class Workload {
             from game
             where id = ?
         """);
-        // Get all games from a company
-        getGamesByCompany = conn.prepareStatement("""
-            select gp.game_id from games_publishers gp join publisher p on gp.publisher_id = p.id where p.name = ?
-            union
-            select gd.game_id from games_developers gd join developer d on gd.developer_id = d.id where d.name = ?
-        """);
-        // Check if user already owns a game from this company
-        checkUserGame = conn.prepareStatement("""
-            select * from library l
-            where l.user_id = ?
-            and l.game_id = ?
-            limit 1
-        """);
-        // Update or insert into company_users_count
-        updateCompanyTotal = conn.prepareStatement("""
-            insert into company_users_count (company_name, total_users, unique_users)
-            values (?, 1, ?)
-            on conflict (company_name)
-            do update set 
-                total_users = company_users_count.total_users + 1,
-                unique_users = company_users_count.unique_users + excluded.unique_users
+        addToCompanyUsersCount = conn.prepareStatement("""
+            WITH args AS (
+                SELECT ?::INT AS user_id, ?::INT AS game_id
+            ),
+            companies AS (
+                SELECT p.name AS company_name
+                FROM publisher p
+                JOIN games_publishers gp ON gp.publisher_id = p.id
+                JOIN args ON gp.game_id = args.game_id
+
+                UNION ALL
+
+                SELECT d.name AS company_name
+                FROM developer d
+                JOIN games_developers gd ON gd.developer_id = d.id
+                JOIN args ON gd.game_id = args.game_id
+            ),
+            company_counts AS (
+                SELECT company_name, COUNT(*) AS appearances
+                FROM companies
+                GROUP BY company_name
+            ),
+            new_uniques AS (
+                SELECT cc.company_name
+                FROM company_counts cc
+                JOIN args ON true
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM (
+                        SELECT p.name AS company_name, gp.game_id
+                        FROM publisher p
+                        JOIN games_publishers gp ON gp.publisher_id = p.id
+                        WHERE p.name = cc.company_name
+
+                        UNION ALL
+
+                        SELECT d.name AS company_name, gd.game_id
+                        FROM developer d
+                        JOIN games_developers gd ON gd.developer_id = d.id
+                        WHERE d.name = cc.company_name
+                    ) company_games
+                    JOIN library l ON l.game_id = company_games.game_id
+                    WHERE l.user_id = args.user_id
+                )
+            )
+            UPDATE company_users_count cuc
+            SET 
+                total_users = total_users + cc.appearances,
+                unique_users = unique_users + 
+                    (CASE WHEN cuc.company_name IN (SELECT company_name FROM new_uniques) THEN 1 ELSE 0 END)
+            FROM company_counts cc
+            WHERE cuc.company_name = cc.company_name
         """);
         //OLTP
         addFriendship = conn.prepareStatement("""
@@ -183,18 +214,6 @@ public class Workload {
             select coalesce(array_agg(name), '{}')
             from publisher
             join games_publishers on publisher_id = id
-            where game_id = ?
-        """);
-        //OLAP
-        getGameCompanies = conn.prepareStatement("""
-            select coalesce(array_agg(name), '{}')
-            from publisher
-            join games_publishers on publisher_id = id
-            where game_id = ?
-            union
-            select coalesce(array_agg(name), '{}')
-            from developer
-            join games_developers on developer_id = id
             where game_id = ?
         """);
         //OLAP
@@ -366,35 +385,9 @@ public class Workload {
         int userId = Utils.randomElement(ids.get("users"));
         int gameId = Utils.randomElement(ids.get("game"));
 
-        // 1. Get all companies (publishers and developers) for the game
-        Utils.setPreparedStatementArgs(getGameCompanies, gameId, gameId);
-        ResultSet companies = getGameCompanies.executeQuery();
-        
-        while (companies.next()) {
-            String companyName = companies.getString(1);
-            boolean isNewUser = true;
-            
-            // 2. Get all games from this company
-            Utils.setPreparedStatementArgs(getGamesByCompany, companyName, companyName);
-            ResultSet games = getGamesByCompany.executeQuery();
+        Utils.setPreparedStatementArgs(addToCompanyUsersCount, userId, gameId);
+        addToCompanyUsersCount.executeUpdate();
 
-            while (games.next()) {
-
-                // 3. Check if user already owns this game
-                Utils.setPreparedStatementArgs(checkUserGame, userId, games.getInt(1));
-                ResultSet hasGame = checkUserGame.executeQuery();
-                if(hasGame.next()) {
-                    isNewUser = false;
-                    break; // no need to check other games from this company
-                }
-            }
-
-            // 4. Insert or update company_users_count
-            Utils.setPreparedStatementArgs(updateCompanyTotal, companyName, isNewUser ? 1 : 0);
-            updateCompanyTotal.executeUpdate();
-        }
-
-        // 5. Add game to library
         Utils.setPreparedStatementArgs(addToLibrary, userId, gameId, gameId);
         addToLibrary.executeUpdate();
 
