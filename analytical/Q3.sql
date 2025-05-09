@@ -1,7 +1,6 @@
-SET work_mem = '4MB';
 -- arguments:
 --   name prefix (Ubisoft)
-EXPLAIN (ANALYZE, BUFFERS)
+--EXPLAIN (ANALYZE, BUFFERS)
 SELECT cuc.total_users, cuc.unique_users
 FROM company_users_count cuc
 WHERE cuc.company_name = 'Ubisoft';

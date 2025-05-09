@@ -11,10 +11,10 @@ public class Workload {
 
     private final Random rand = new Random();
     private final Connection conn;
-    private PreparedStatement addPlaytime, addReview, addToLibrary, addToCompanyUsersCount,
-            addFriendship, addGame, addUser, getGameInfo, getGameDevelopers, getGamePublishers, 
-            getGameCategories, getGameGenres, getGameTags, getGameScore, getGameRecentReviews, 
-            getUserInfo, getUserTopGames, getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
+    private PreparedStatement addPlaytime, addReview, addToLibrary, addFriendship, addGame, 
+            addUser, getGameInfo, getGameDevelopers, getGamePublishers, getGameCategories, 
+            getGameGenres, getGameTags, getGameScore, getGameRecentReviews, getUserInfo, 
+            getUserTopGames, getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
     // considered ids for this client
     private final Map<String, List<Integer>> ids = Map.of(
             "game", new ArrayList<>(),
@@ -96,59 +96,6 @@ public class Workload {
             select ?, ?, now(), price, 0, 0
             from game
             where id = ?
-        """);
-        addToCompanyUsersCount = conn.prepareStatement("""
-            WITH args AS (
-                SELECT ?::INT AS user_id, ?::INT AS game_id
-            ),
-            companies AS (
-                SELECT p.name AS company_name
-                FROM publisher p
-                JOIN games_publishers gp ON gp.publisher_id = p.id
-                JOIN args ON gp.game_id = args.game_id
-
-                UNION ALL
-
-                SELECT d.name AS company_name
-                FROM developer d
-                JOIN games_developers gd ON gd.developer_id = d.id
-                JOIN args ON gd.game_id = args.game_id
-            ),
-            company_counts AS (
-                SELECT company_name, COUNT(*) AS appearances
-                FROM companies
-                GROUP BY company_name
-            ),
-            new_uniques AS (
-                SELECT cc.company_name
-                FROM company_counts cc
-                JOIN args ON true
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM (
-                        SELECT p.name AS company_name, gp.game_id
-                        FROM publisher p
-                        JOIN games_publishers gp ON gp.publisher_id = p.id
-                        WHERE p.name = cc.company_name
-
-                        UNION ALL
-
-                        SELECT d.name AS company_name, gd.game_id
-                        FROM developer d
-                        JOIN games_developers gd ON gd.developer_id = d.id
-                        WHERE d.name = cc.company_name
-                    ) company_games
-                    JOIN library l ON l.game_id = company_games.game_id
-                    WHERE l.user_id = args.user_id
-                )
-            )
-            UPDATE company_users_count cuc
-            SET 
-                total_users = total_users + cc.appearances,
-                unique_users = unique_users + 
-                    (CASE WHEN cuc.company_name IN (SELECT company_name FROM new_uniques) THEN 1 ELSE 0 END)
-            FROM company_counts cc
-            WHERE cuc.company_name = cc.company_name
         """);
         //OLTP
         addFriendship = conn.prepareStatement("""
@@ -384,9 +331,6 @@ public class Workload {
     private void buyGame() throws SQLException {
         int userId = Utils.randomElement(ids.get("users"));
         int gameId = Utils.randomElement(ids.get("game"));
-
-        Utils.setPreparedStatementArgs(addToCompanyUsersCount, userId, gameId);
-        addToCompanyUsersCount.executeUpdate();
 
         Utils.setPreparedStatementArgs(addToLibrary, userId, gameId, gameId);
         addToLibrary.executeUpdate();
