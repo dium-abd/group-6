@@ -218,10 +218,9 @@ public class Workload {
         //OLAP
         getRecentGamesPerTag = conn.prepareStatement("""
             select g.id, g.name, g.release_date
-            from tag t
-            join games_tags gt on gt.tag_id = t.id
+            from games_tags gt
             join game g on g.id = gt.game_id
-            where t.id = ?
+            where gt.tag_id = ?
             order by g.release_date desc
             limit 25
         """);
