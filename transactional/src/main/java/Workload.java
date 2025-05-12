@@ -217,12 +217,14 @@ public class Workload {
         """);
         //OLAP
         getRecentGamesPerTag = conn.prepareStatement("""
+            with game_ids AS MATERIALIZED (
+            select game_id FROM games_tags WHERE tag_id = ?
+            )
             select g.id, g.name, g.release_date
-            from games_tags gt
-            join game g on g.id = gt.game_id
-            where gt.tag_id = ?
+            from game_ids
+            join game g ON g.id = game_ids.game_id
             order by g.release_date desc
-            limit 25
+            limit 25;
         """);
         //OLAP
         getGamesByTitle = conn.prepareStatement("""
