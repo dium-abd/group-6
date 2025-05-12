@@ -11,10 +11,10 @@ public class Workload {
 
     private final Random rand = new Random();
     private final Connection conn;
-    private PreparedStatement addPlaytime, addReview, addToLibrary, addFriendship, addGame, addUser,
-            getGameInfo, getGameDevelopers, getGamePublishers, getGameCategories, getGameGenres, getGameTags,
-            getGameScore, getGameRecentReviews, getUserInfo, getUserTopGames, getRecentGamesPerTag, getGamesByTitle,
-            getGamesSemantic;
+    private PreparedStatement addPlaytime, addReview, addToLibrary, addFriendship, addGame, 
+            addUser, getGameInfo, getGameDevelopers, getGamePublishers, getGameCategories, 
+            getGameGenres, getGameTags, getGameScore, getGameRecentReviews, getUserInfo, 
+            getUserTopGames, getRecentGamesPerTag, getGamesByTitle, getGamesSemantic;
     // considered ids for this client
     private final Map<String, List<Integer>> ids = Map.of(
             "game", new ArrayList<>(),
