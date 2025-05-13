@@ -39,6 +39,7 @@ WHERE EXTRACT(YEAR FROM l.added_date) = EXTRACT(YEAR FROM CURRENT_DATE)
 GROUP BY g.id, g.name;
 
 CREATE INDEX IF NOT EXISTS index_sales_currentyear_sales_desc ON sales_currentYear (sales DESC);
+VACUUM ANALYZE sales_currentYear;
 
 CREATE OR REPLACE FUNCTION update_sales_current_year()
 RETURNS TRIGGER AS $$
