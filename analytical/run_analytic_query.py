@@ -13,9 +13,9 @@ def extract_total_exec_time(plan_text):
 
 def run_query(filepath, warmup_reps, repetitions):
     conn = psycopg2.connect(
-        dbname="abd",
+        dbname="testdb",
         user="postgres",
-        password="postgres", ### mudar para a password do seu postgres 
+        password="postgres",
         host="localhost",
         port="5432"
     )
