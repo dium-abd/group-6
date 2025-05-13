@@ -89,6 +89,11 @@ public class Workload {
         addReview = conn.prepareStatement("""
             insert into review (user_id, game_id, created_date, recommend, text)
             values (?, ?, now(), ?, ?)
+            on conflict (user_id, game_id)
+            do update set
+                created_date = NOW(),
+                recommend = excluded.recommend,
+                text = excluded.text;
         """);
         //OLTP
         addToLibrary = conn.prepareStatement("""
@@ -192,13 +197,15 @@ public class Workload {
         """);
         //OLAP
         getGameRecentReviews = conn.prepareStatement("""
-            select u.id, u.username, r.created_date, r.recommend, r.text, l.playtime
-            from review r
-            join users u on u.id = r.user_id
-            join library l on l.user_id = r.user_id and l.game_id = r.game_id
-            where r.game_id = ?
-            order by r.created_date desc
-            limit 25
+            SELECT u.id, u.username, r.created_date, r.recommend, r.text, l.playtime
+            FROM (
+                SELECT * FROM review
+                WHERE game_id = ?
+                ORDER BY created_date DESC
+                LIMIT 25
+            ) r
+            JOIN users u ON u.id = r.user_id
+            JOIN library l ON l.user_id = r.user_id AND l.game_id = r.game_id;
         """);
         //OLAP
         getUserInfo = conn.prepareStatement("""
@@ -217,14 +224,14 @@ public class Workload {
         """);
         //OLAP
         getRecentGamesPerTag = conn.prepareStatement("""
-            with game_ids AS MATERIALIZED (
-            select game_id FROM games_tags WHERE tag_id = ?
-            )
-            select g.id, g.name, g.release_date
-            from game_ids
-            join game g ON g.id = game_ids.game_id
-            order by g.release_date desc
-            limit 25;
+            SELECT g.id,
+            g.name,
+            g.release_date
+            FROM   games_tags gt
+            JOIN   game        g ON g.id = gt.game_id
+            WHERE  gt.tag_id = ?
+            ORDER  BY g.release_date DESC
+            LIMIT  25;
         """);
         //OLAP
         getGamesByTitle = conn.prepareStatement("""
