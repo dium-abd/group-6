@@ -1,42 +1,38 @@
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT FROM information_schema.tables
-        WHERE table_schema = 'public' 
-          AND table_name = 'company_users_count'
-    ) THEN
-        -- Create the table
-        CREATE TABLE company_users_count (
-            company_name VARCHAR PRIMARY KEY,
-            total_users INTEGER NOT NULL DEFAULT 0,
-            unique_users INTEGER NOT NULL DEFAULT 0
-        );
+-- This script creates a new table to store the count of users for each company
+-- and updates it whenever a new game is added to the library.
 
-        -- Populate the table from existing data
-        INSERT INTO company_users_count (company_name, total_users, unique_users)
-        SELECT 
-            g.name AS company_name, 
-            COUNT(*) AS total_users, 
-            COUNT(DISTINCT l.user_id) AS unique_users
-        FROM (
-            SELECT p.name, gp.game_id
-            FROM publisher p
-            JOIN games_publishers gp ON gp.publisher_id = p.id
-            
-            UNION ALL
-            
-            SELECT d.name, gd.game_id
-            FROM developer d
-            JOIN games_developers gd ON gd.developer_id = d.id
-        ) AS g
-        JOIN library l ON l.game_id = g.game_id
-        GROUP BY g.name;
-    END IF;
-END
-$$;
+DROP TABLE IF EXISTS company_users_count;
+
+-- Create the table
+CREATE TABLE company_users_count (
+    company_name VARCHAR PRIMARY KEY,
+    total_users INTEGER NOT NULL DEFAULT 0,
+    unique_users INTEGER NOT NULL DEFAULT 0
+);
+
+-- Populate the table from existing data
+INSERT INTO company_users_count (company_name, total_users, unique_users)
+SELECT 
+    g.name AS company_name, 
+    COUNT(*) AS total_users, 
+    COUNT(DISTINCT l.user_id) AS unique_users
+FROM (
+    SELECT p.name, gp.game_id
+    FROM publisher p
+    JOIN games_publishers gp ON gp.publisher_id = p.id
+    
+    UNION ALL
+    
+    SELECT d.name, gd.game_id
+    FROM developer d
+    JOIN games_developers gd ON gd.developer_id = d.id
+) AS g
+JOIN library l ON l.game_id = g.game_id
+GROUP BY g.name;
 
 
-CREATE OR REPLACE FUNCTION update_company_users_count() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION update_company_users_count() 
+RETURNS TRIGGER AS $$
 BEGIN
     WITH companies AS (
         SELECT p.name AS company_name

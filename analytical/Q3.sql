@@ -1,13 +1,15 @@
+
+SET work_mem = '256MB';
+
 -- arguments:
 --   name prefix (Ubisoft)
---EXPLAIN (ANALYZE, BUFFERS)
+--EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
 SELECT cuc.total_users, cuc.unique_users
 FROM company_users_count cuc
 WHERE cuc.company_name = 'Ubisoft';
 
 
 -- Third change
---EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
 --SELECT count(*) AS total, count(DISTINCT l.user_id) AS unique
 --FROM library l
 --WHERE l.game_id IN (

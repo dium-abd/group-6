@@ -1,6 +1,6 @@
 -- arguments:
 --   target user id (3331100)
-EXPLAIN (ANALYZE, BUFFERS)
+--EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
 WITH args AS (
     SELECT 3331100 AS id
 ),
@@ -26,6 +26,7 @@ WHERE NOT EXISTS (
 GROUP BY 1
 ORDER BY count(*) DESC
 LIMIT 15;
+
 
 -- Query original:
 --
