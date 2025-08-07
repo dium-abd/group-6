@@ -1,5 +1,10 @@
 # SteamBench
 
+## Overview
+
+This project was developed in the scope of the Database Administration discipline of the University of Minho.
+The main objective was the setup, optimization, and evaluation of a benchmark based on a small portion of the Steam online store dataset, covering both transactional and analytical operations.
+
 ## Load Data
 
 - Download the dataset (https://storage.googleapis.com/abd25/data.zip) and extract it.
